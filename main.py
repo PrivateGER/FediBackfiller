@@ -119,11 +119,18 @@ async def fetch_replies(request: FetchRepliesRequest):
 
             response = response.json()
 
-
             # Max 50 replies, cut off older ones (new -> old)
             if len(response) > 50:
                 response = response[:50]
 
+            # Misskey does NOT include URIs for local posts, so we have to fake them
+            for reply in response:
+                if "uri" in reply:
+                    continue
+
+                reply["uri"] = f"https://{post_base_host}/notes/{reply['id']}"
+
+            # fallback to url if uri isnt set
             tasks = [fetch_ap_object(client, reply["uri"], request.token) for reply in response]
             await asyncio.gather(*tasks)
 
