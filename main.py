@@ -137,6 +137,9 @@ async def fetch_replies_recursive(client, post_base_host, post_id, token, depth,
     if len(response) > 50:
         response = response[:50]
 
+    if len(response) == 0:
+        print("RECURSIVE BRANCH END FOUND")
+
     # Misskey does NOT include URIs for local posts, so we have to fake them
     for reply in response:
         if "uri" not in reply:
