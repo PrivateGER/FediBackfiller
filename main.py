@@ -106,36 +106,51 @@ async def fetch_replies(request: FetchRepliesRequest):
             return {"message": "Fetched Mastodon replies"}
         else:
             # Fetch Misskey replies (no other API matters lol)
+            # We have to recurse through the replies, as Misskey doesn't provide a flat list of ALL replies
 
             print(f"GET MISSKEY REPLIES: https://{post_base_host}/api/notes/children")
 
-            response = await client.post(f"https://{post_base_host}/api/notes/children", json={
-                "limit": 50,
-                "noteId": post_id,
-                "showQuotes": True
-            })
+            try:
+                replies = await fetch_replies_recursive(client, post_base_host, post_id, request.token, 0, 50)
+                return {"message": "Fetched Misskey replies", "replies": replies}
+            except Exception as e:
+                return JSONResponse(status_code=500, content={"message": f"Failed to fetch Misskey replies: {str(e)}"})
 
-            if response.status_code != 200:
-                return JSONResponse(status_code=500, content={"message": "Failed to fetch Misskey replies"})
 
-            response = response.json()
+async def fetch_replies_recursive(client, post_base_host, post_id, token, depth, max_depth):
+    if depth > max_depth:
+        print("-ABORT- MAX DEPTH REACHED")
+        return []
 
-            # Max 50 replies, cut off older ones (new -> old)
-            if len(response) > 50:
-                response = response[:50]
+    response = await client.post(f"https://{post_base_host}/api/notes/children", json={
+        "limit": 50,
+        "noteId": post_id,
+        "showQuotes": True
+    })
 
-            # Misskey does NOT include URIs for local posts, so we have to fake them
-            for reply in response:
-                if "uri" in reply:
-                    continue
+    if response.status_code != 200:
+        return []
 
-                reply["uri"] = f"https://{post_base_host}/notes/{reply['id']}"
+    response = response.json()
 
-            # fallback to url if uri isnt set
-            tasks = [fetch_ap_object(client, reply["uri"], request.token) for reply in response]
-            await asyncio.gather(*tasks)
+    # Max 50 replies, cut off older ones (new -> old)
+    if len(response) > 50:
+        response = response[:50]
 
-            return {"message": "Fetched Misskey replies"}
+    # Misskey does NOT include URIs for local posts, so we have to fake them
+    for reply in response:
+        if "uri" not in reply:
+            reply["uri"] = f"https://{post_base_host}/notes/{reply['id']}"
+
+        # Recursively fetch replies of the reply
+        print("RECURSING into reply:", reply["uri"])
+        reply["replies"] = await fetch_replies_recursive(client, post_base_host, reply['id'], token, depth + 1, max_depth)
+
+    # fallback to url if uri isn't set
+    tasks = [fetch_ap_object(client, reply["uri"], token) for reply in response]
+    await asyncio.gather(*tasks)
+
+    return response
 
 
 async def fetch_ap_object(client, url, token):
