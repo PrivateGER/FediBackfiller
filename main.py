@@ -68,6 +68,8 @@ async def fetch_replies(request: FetchRepliesRequest):
                 datetime.datetime.now() - DEBOUNCE_CACHE[request.post_url]).total_seconds() < DEBOUNCE_TIMEOUT:
             return {"message": "Debounced"}
 
+        DEBOUNCE_CACHE[request.post_url] = datetime.datetime.now()
+
         # Check whether the URI is a redirect, and follow it if it is. Replace the URI with the final URI.
         response = await client.get(request.post_url, follow_redirects=True)
         if response.status_code != 200:
@@ -101,7 +103,6 @@ async def fetch_replies(request: FetchRepliesRequest):
             tasks = [fetch_ap_object(client, reply["url"], request.token) for reply in response["descendants"]]
             await asyncio.gather(*tasks)
 
-            DEBOUNCE_CACHE[request.post_url] = datetime.datetime.now()
             return {"message": "Fetched Mastodon replies"}
         else:
             # Fetch Misskey replies (no other API matters lol)
@@ -134,7 +135,6 @@ async def fetch_replies(request: FetchRepliesRequest):
             tasks = [fetch_ap_object(client, reply["uri"], request.token) for reply in response]
             await asyncio.gather(*tasks)
 
-            DEBOUNCE_CACHE[request.post_url] = datetime.datetime.now()
             return {"message": "Fetched Misskey replies"}
 
 
