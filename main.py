@@ -2,13 +2,14 @@ import asyncio
 import datetime
 import urllib.parse
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter, _rate_limit_exceeded_handler
+from starlette.responses import JSONResponse
 
 origins = [
     "https://plasmatrap.com",
@@ -67,6 +68,13 @@ async def fetch_replies(request: FetchRepliesRequest):
                 datetime.datetime.now() - DEBOUNCE_CACHE[request.post_url]).total_seconds() < DEBOUNCE_TIMEOUT:
             return {"message": "Debounced"}
 
+        # Check whether the URI is a redirect, and follow it if it is. Replace the URI with the final URI.
+        response = await client.get(request.post_url, follow_redirects=True)
+        if response.status_code != 200:
+            return JSONResponse(status_code=500, content={"message": "Failed to fetch post URL"})
+
+        request.post_url = str(response.url)
+
         # Detect Mastodon or Misskey API based on ID schema
         # Mastodon uses Snowflake, Misskey uses a custom schema
 
@@ -82,7 +90,7 @@ async def fetch_replies(request: FetchRepliesRequest):
             response = await client.get(
                 urllib.parse.urljoin(f"https://{post_base_host}", f"/api/v1/statuses/{post_id}/context"))
             if response.status_code != 200:
-                return {"message": "Failed to fetch Mastodon replies"}
+                return JSONResponse(status_code=500, content={"message": "Failed to fetch Mastodon replies"})
 
             response = response.json()
 
@@ -103,7 +111,7 @@ async def fetch_replies(request: FetchRepliesRequest):
             })
 
             if response.status_code != 200:
-                return {"message": "Failed to fetch Misskey replies"}
+                return JSONResponse(status_code=500, content={"message": "Failed to fetch Misskey replies"})
 
             response = response.json()
 
