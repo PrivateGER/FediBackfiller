@@ -82,7 +82,7 @@ async def fetch_replies(request: FetchRepliesRequest):
         post_id = request.post_url.split("/")[-1]
         post_base_host = urllib.parse.urlsplit(request.post_url).netloc
 
-        # Check if the ID is a Snowflake
+        # Check if the ID is a Snowflake (Pleroma/Akkoma or Mastodon)
         if len(post_id) == 18:
             # Fetch Mastodon replies
             print(f"GET MASTODON REPLIES: https://{post_base_host}/api/v1/statuses/{post_id}/context")
@@ -93,6 +93,10 @@ async def fetch_replies(request: FetchRepliesRequest):
                 return JSONResponse(status_code=500, content={"message": "Failed to fetch Mastodon replies"})
 
             response = response.json()
+
+            # Limit: 50 replies. Cut off older ones, they're more likely to be irrelevant. Mastodon sorts old -> new
+            if len(response["descendants"]) > 50:
+                response["descendants"] = response["descendants"][-50:]
 
             tasks = [fetch_ap_object(client, reply["url"], request.token) for reply in response["descendants"]]
             await asyncio.gather(*tasks)
@@ -114,6 +118,11 @@ async def fetch_replies(request: FetchRepliesRequest):
                 return JSONResponse(status_code=500, content={"message": "Failed to fetch Misskey replies"})
 
             response = response.json()
+
+
+            # Max 50 replies, cut off older ones (new -> old)
+            if len(response) > 50:
+                response = response[:50]
 
             tasks = [fetch_ap_object(client, reply["uri"], request.token) for reply in response]
             await asyncio.gather(*tasks)
