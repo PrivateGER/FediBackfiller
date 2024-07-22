@@ -2,7 +2,6 @@ import asyncio
 import datetime
 import urllib.parse
 
-import requests
 from fastapi import FastAPI
 from pydantic import BaseModel
 import httpx
@@ -44,7 +43,7 @@ async def fetch_replies(request: FetchRepliesRequest):
     }) as client:
         if request.token not in AUTHENTICATION_CACHE:
             # Verify user login by fetching the /i/ endpoint
-            response = requests.post(f"{INSTANCE_BASE_URL}/api/i", json={
+            response = await client.post(f"{INSTANCE_BASE_URL}/api/i", json={
                 "i": request.token
             })
 
