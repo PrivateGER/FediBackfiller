@@ -6,11 +6,15 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import httpx
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi import Limiter, _rate_limit_exceeded_handler
 
 origins = [
     "https://plasmatrap.com",
 ]
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -19,6 +23,8 @@ app.add_middleware(
     allow_methods=["POST"],
     allow_headers=["*"],
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 INSTANCE_BASE_URL = "https://plasmatrap.com"
 AUTHENTICATION_CACHE = {}
@@ -36,6 +42,7 @@ class FetchRepliesRequest(BaseModel):
     token: str
 
 
+@limiter.limit("16/minute")
 @app.post("/fetch_replies")
 async def fetch_replies(request: FetchRepliesRequest):
     async with httpx.AsyncClient(headers={
