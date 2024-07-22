@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "fedibackfiller"
+version = "0.1.0"
+description = ""
+authors = ["PrivateGER <privateger@privateger.me>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+httpx = "^0.27.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
